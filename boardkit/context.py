@@ -86,6 +86,9 @@ CONTEXTS: dict = {
     # kk6e S3a: dash-tui (command-dashboard) is launched from its own
     # checkout, outside ops/repoman; it publishes no snapshot yet.
     "dash": Context("dash", None, ("~/repos/command-dashboard/bin/dash-tui",)),
+    # 1wan: the routing board reads routing-project's routing.json and
+    # publishes no snapshot of its own, hence no schema.
+    "routing": Context("routing", None, ("bin/routing-board",)),
 }
 
 

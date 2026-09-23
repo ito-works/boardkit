@@ -4,6 +4,7 @@ text     cell-width aware clipping/wrapping, glyphs, control-char cleaning
 styles   256/8-colour style tables (curses attrs resolved lazily)
 layout   tiers, boxes, viewport scrolling
 cursor   UIState, pure key handling, overlay/expansion bookkeeping
+panels   boxed panels in a flow layout, grids, panel focus, the z zoom (tjq1)
 workers  Runner, SourceWorker, Coalescer, Gen
 expand   background expansion fetches with token ownership
 app      the curses loop, clipboard, tmux jump, url open

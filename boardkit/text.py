@@ -8,10 +8,22 @@ import unicodedata
 
 CONTROL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
+# Whole CSI (ESC [ params 0x30-0x3F, intermediates 0x20-0x2F, final 0x40-0x7E,
+# per ECMA-48) and OSC (ESC ] ... BEL | ESC \) sequences, so their payload does
+# not survive as visible text once ESC itself is scrubbed. Same families as
+# kenn-io/kata internal/textsafe, with the full CSI byte ranges (jibot-code#efmp).
+ESCAPE_SEQ_RE = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\]([^\x07\x1b]|\x1b[^\\])*(\x07|\x1b\\)")
+
 
 def clean(text) -> str:
-    """Collapse every control char (\n, \t, ESC, ...) to one space."""
-    return CONTROL_RE.sub(" ", str(text))
+    """Drop CSI/OSC escape sequences and Unicode format chars (Cf: bidi
+    overrides such as U+202E, zero-width spaces), then collapse every
+    remaining control char (\n, \t, ESC, ...) to one space."""
+    text = ESCAPE_SEQ_RE.sub("", str(text))
+    if not text.isascii():
+        text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+    return CONTROL_RE.sub(" ", text)
 
 
 def _cw(ch: str) -> int:

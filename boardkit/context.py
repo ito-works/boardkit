@@ -91,6 +91,8 @@ CONTEXTS: dict = {
     # 1wan: the routing board reads routing-project's routing.json and
     # publishes no snapshot of its own, hence no schema.
     "routing": Context("routing", None, ("bin/routing-board",)),
+    # ssb1: the experiment board reads kata live and publishes no snapshot.
+    "experiments": Context("experiments", None, ("bin/experiment-board",)),
 }
 
 

@@ -486,6 +486,13 @@ class Board(Protocol):
     it the loop clears the zoom every frame, so `z` arms nothing and no
     other behaviour changes.
 
+    `scrolls_expansion_rows` (optional, default False; 6swq): the board
+    wraps its expansion lines into screen rows itself, so J / K must step
+    through those rows, not through the lines. The loop then hands it every
+    line as expand.ScrolledLines and the board cuts its wrapped rows with
+    expand.scroll_rows(). Without it the loop hands the board the lines
+    from the scroll offset on.
+
     `on_action`: y9nb — a cursor_first / cursor_last / page_down / page_up
     action answered with Action("noop") gets the engine's own move
     (cursor.default_move); any other answer is the board's.
@@ -504,7 +511,8 @@ class Board(Protocol):
 
 
 CORE_ACTIONS = ("quit", "close", "toggle", "help", "refresh", "resize",
-                "board_prev", "board_next")      # y9nb: the last two are the engine's
+                "board_prev", "board_next",      # y9nb: these two are the engine's
+                "expansion_down", "expansion_up")  # 6swq: and these, J / K
 
 
 _YN = " — y/N"
@@ -922,7 +930,11 @@ def tui_loop(stdscr, curses_mod, board, *, copy=None, opener=None,
             # while zoomed `its` is one panel, so a mark outside it is HIDDEN,
             # not gone: pruning against this list would destroy it (4vwr)
             ui = resolve_cursor(ui, its, prune_marks=ui.zoom is None)
-            expanded = {exp["key"]: exp["lines"]} if exp["key"] else {}
+            # 6swq: the board gets the expansion from its scroll offset on
+            expanded = ({exp["key"]: expand_mod.expansion_view(
+                exp, board.ascii_only(state),
+                rows=getattr(board, "scrolls_expansion_rows", False))}     # optional
+                        if exp["key"] else {})
             state = board.with_cursor(
                 state, ui, expanded,
                 confirm_footer(pending, width, clock.monotonic()) if pending is not None
@@ -1069,6 +1081,8 @@ def tui_loop(stdscr, curses_mod, board, *, copy=None, opener=None,
                         lines_now, expander = board.expansion_for(item, state)
                         expand_mod.open_expansion(item.key, lines_now, expander,
                                                   exp, detail_q, exp_cache)
+            elif action in ("expansion_down", "expansion_up"):
+                expand_mod.scroll_expansion(exp, 1 if action == "expansion_down" else -1)
             elif action == "help":
                 open_overlay(overlay, board.help_lines)
             elif action in ("board_prev", "board_next"):

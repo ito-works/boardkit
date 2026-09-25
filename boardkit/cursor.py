@@ -36,6 +36,9 @@ STANDARD_ACTIONS: dict[int, str] = {
     KEY_ENTER: "toggle", 10: "toggle", 13: "toggle",
     ord("?"): "help",
     ord("["): "board_prev", ord("]"): "board_next",
+    # 6swq: scroll the open expansion a line, so one taller than the screen
+    # can be read to its end; the loop applies them (expand.scroll_expansion)
+    ord("J"): "expansion_down", ord("K"): "expansion_up",
 }
 # the engine's own keys: a board's map never reaches them
 ENGINE_KEYS: frozenset[int] = frozenset((KEY_RESIZE, 27, ord("q"), ord("r"), ord("["), ord("]")))
@@ -88,7 +91,7 @@ def default_move(ui: UIState, action: str) -> UIState:
 
 def new_overlay() -> dict:
     return {"lines": None, "token": 0, "inflight": False, "counter": 0, "key": None,
-            "pending": {}}
+            "pending": {}, "scroll": 0}
 
 
 def open_overlay(overlay: dict, lines) -> int:
@@ -97,6 +100,7 @@ def open_overlay(overlay: dict, lines) -> int:
     overlay["token"] = overlay["counter"]
     overlay["lines"] = list(lines) if lines is not None else None
     overlay["inflight"] = False
+    overlay["scroll"] = 0                          # 6swq: every open starts at the top
     return overlay["token"]
 
 
@@ -106,6 +110,7 @@ def close_overlay(overlay: dict) -> None:
     overlay["lines"] = None
     overlay["inflight"] = False
     overlay["key"] = None
+    overlay["scroll"] = 0
 
 
 def apply_detail_result(overlay: dict, token: int, lines: list[str]) -> bool:
@@ -185,7 +190,8 @@ def handle_key(ui: UIState, key: int, extra: dict | None = None) -> tuple[UIStat
     refuse a board's rebinding of a standard key to a different meaning —
     that refusal is `keymap_problem`, applied once by the loop before curses
     takes the screen. Space/x toggle the cursor row's key in `marked` unless
-    the board maps them. `z` (4vwr) toggles `zoom` between None and the
+    the board maps them. J / K (6swq) emit expansion_down / expansion_up,
+    which the loop answers by scrolling the open expansion. `z` (4vwr) toggles `zoom` between None and the
     cursor's item key — the board turns that key into the panel it paints,
     and may REFUSE the zoom (app.tui_loop's `with_zoom` hook); it is checked
     after `extra` like the walk, so a board that wants `z` for itself still
@@ -221,6 +227,8 @@ def handle_key(ui: UIState, key: int, extra: dict | None = None) -> tuple[UIStat
         m = (ui.marked - {ui.cursor_key} if ui.cursor_key in ui.marked
              else ui.marked | {ui.cursor_key})
         return replace(ui, marked=frozenset(m)), None
+    if key in (ord("J"), ord("K")):                 # 6swq: the loop scrolls the expansion
+        return ui, STANDARD_ACTIONS[key]
     if key in (KEY_ENTER, 10, 13):
         if ui.items_len == 0:
             return ui, None

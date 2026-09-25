@@ -18,5 +18,6 @@ Published to https://github.com/ito-works/boardkit by ops/repoman/bin/boardkit-p
 """
 
 # y9nb: the contract S3's dash-tui pins against (the standard keymap,
-# [ / ], the registry)
-__version__ = "2026.09.22"
+# [ / ], the registry). 6swq: J / K joined the standard keymap, so a board
+# that bound either to its own action is refused at startup.
+__version__ = "2026.09.25"

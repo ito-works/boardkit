@@ -28,7 +28,7 @@ from typing import Callable
 
 from boardkit import layout as L
 from boardkit.cursor import PAGE_ROWS
-from boardkit.text import cell_width, clip, glyph
+from boardkit.text import cell_width, clean, clip, glyph
 
 RULE = {False: ("─", "│"), True: ("-", "|")}       # (rule, column separator) by ascii_only
 FOCUS_STYLE = "amber"
@@ -55,9 +55,13 @@ def _cell(value) -> tuple:
 
 def fit_cell(text: str, width: int, right: bool, ascii_only: bool) -> str:
     """`text` in exactly `width` cells: padded, or truncated with the
-    single-cell ellipsis. Never wrapped."""
+    single-cell ellipsis. Never wrapped. Cleaned before it is measured, so
+    a zero-width char cannot shift the next separator and an escape cannot
+    be clipped open (jibot-code#35sv); layout.fit_row cleans again later,
+    which is a no-op on clean text."""
     if width <= 0:
         return ""
+    text = clean(text)
     if cell_width(text) > width:
         text = clip(text, width - 1) + glyph("clip", ascii_only)
     pad = " " * (width - cell_width(text))
@@ -142,7 +146,7 @@ class Panel:
             w = self.grid.width(ascii_only)
         else:
             w = max((L.row_width(r) for r in self.lines), default=0)
-        return max(w, cell_width(self.title) + 2)
+        return max(w, cell_width(clean(self.title)) + 2)
 
     def natural_height(self) -> int:
         return self.grid.height() if self.grid is not None else max(1, len(self.lines))

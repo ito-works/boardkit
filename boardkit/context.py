@@ -42,7 +42,7 @@ def _expand_home(raw: str, env) -> str:
 
 
 def state_dir(env=None) -> str:
-    # (the body of marshalboard.publish.state_dir today, plus HOME-aware
+    # (the body of repomanboard.publish.state_dir today, plus HOME-aware
     # expansion so a fake env is honoured — see _expand_home above)
     env = os.environ if env is None else env
     return _expand_home(env.get(STATE_DIR_ENV) or STATE_DIR_DEFAULT, env)

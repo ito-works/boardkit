@@ -137,7 +137,7 @@ class UIState:
     marked: frozenset = frozenset()
     # 4vwr: the item KEY `z` took the zoom on, or None. The engine has no
     # notion of a panel — the board maps the key to the panel that paints
-    # it (marshalboard's render._sel_panel reads the key's prefix) — so a
+    # it (repomanboard's render._sel_panel reads the key's prefix) — so a
     # row leaving on a refresh does NOT unzoom; the panel emptying does,
     # and the BOARD says so by refusing the zoom (app.tui_loop's
     # `with_zoom` hook). Appended last, same rule as `marked`.

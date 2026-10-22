@@ -204,7 +204,7 @@ def main(argv=None, *, run=subprocess.run, environ=os.environ, out=print,
     line = launch_line(repoman_dir, ctx, environ)
     # y9nb: `-l` sends the line LITERALLY, so tmux never parses a token in it
     # as a key name; Enter goes as its own send-keys. This is the shape
-    # marshalboard.refresh types a relaunch with.
+    # repomanboard.refresh types a relaunch with.
     for keys in (["-l", line], ["Enter"]):
         p = _run(["tmux"] + server + ["send-keys", "-t", pane] + keys, run, environ)
         if p is not None and p.returncode == 0:

@@ -920,7 +920,7 @@ def tui_loop(stdscr, curses_mod, board, *, copy=None, opener=None,
             # An expansion opened in a panel the zoom then hides is left OPEN
             # and unpainted, and Esc spends its first press closing it. That
             # is deliberate. Closing it automatically was tried and reverted:
-            # the board's own fold (marshalboard's `N quiet · M pinned`) is an
+            # the board's own fold (repomanboard's `N quiet · M pinned`) is an
             # expansion whose rows are items ONLY while it is open, so closing
             # it removes those rows from items() — and then the prune below
             # destroys any mark on them, breaking the very promise this zoom

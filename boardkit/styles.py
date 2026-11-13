@@ -55,11 +55,14 @@ def init_styles(curses_mod) -> dict:
         # Dark saturated reds (160) trip terminal minimum-contrast and
         # render white; softening toward #d75f5f keeps luminance up.
         err_c = 167 if c256 else curses_mod.COLOR_RED     # #d75f5f
+        # ANSI yellow is the theme's to draw, and herdr draws it olive;
+        # a fixed 256-colour code stays yellow (jibot-code#mvpq).
+        yel_c = 220 if c256 else curses_mod.COLOR_YELLOW  # #ffd700
         pairs = (("ok", ok_c, bold),
-                 ("warn", curses_mod.COLOR_YELLOW, 0),
+                 ("warn", yel_c, 0),
                  ("err", err_c, bold),
-                 ("title", curses_mod.COLOR_YELLOW, bold),
-                 ("amber", curses_mod.COLOR_YELLOW, bold),
+                 ("title", yel_c, bold),
+                 ("amber", yel_c, bold),
                  ("box", curses_mod.COLOR_BLUE, 0))
         for i, (name, color, extra) in enumerate(pairs, start=1):
             curses_mod.init_pair(i, color, bg)

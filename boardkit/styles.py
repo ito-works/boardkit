@@ -57,7 +57,7 @@ def init_styles(curses_mod) -> dict:
         err_c = 167 if c256 else curses_mod.COLOR_RED     # #d75f5f
         # ANSI yellow is the theme's to draw, and herdr draws it olive;
         # a fixed 256-colour code stays yellow (jibot-code#mvpq).
-        yel_c = 220 if c256 else curses_mod.COLOR_YELLOW  # #ffd700
+        yel_c = 221 if c256 else curses_mod.COLOR_YELLOW  # #ffd75f
         pairs = (("ok", ok_c, bold),
                  ("warn", yel_c, 0),
                  ("err", err_c, bold),

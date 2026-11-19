@@ -2,7 +2,7 @@
 
 A Context is registry data over the Board protocol in boardkit.app: its
 name, the snapshot schema it publishes / reads, where the snapshot lives,
-the launch command `board <name>` types, and the tmux window it gets. It
+the launch command `board <name>` types, and the herdr tab label it gets. It
 is NOT a second interface — the board object itself is a boardkit.app.Board.
 """
 from __future__ import annotations
@@ -11,12 +11,10 @@ import os
 import re
 from dataclasses import dataclass
 
-# y9nb: a context name is a lowercase slug by POLICY, not by a tmux limit:
-# it becomes the window name (`board: <name>`), the snapshot file name
+# y9nb: a context name is a lowercase slug by POLICY, not by a herdr limit:
+# it becomes the tab label (`board: <name>`), the snapshot file name
 # (`<name>.json`) and a token of the launch line, and a slug needs no
-# quoting or escaping in any of the three. (tmux itself would cope with a
-# "#": launcher.tmux_literal doubles it for `new-window -n` and tmux stores
-# the single "#" back, so an exact find_window compare would still match.)
+# quoting or escaping in any of the three.
 NAME_RE = re.compile(r"[a-z0-9_-]+\Z")
 
 STATE_DIR_ENV = "REPOMAN_BOARD_STATE_DIR"

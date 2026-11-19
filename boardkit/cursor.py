@@ -142,7 +142,7 @@ class UIState:
     # and the BOARD says so by refusing the zoom (app.tui_loop's
     # `with_zoom` hook). Appended last, same rule as `marked`.
     zoom: str | None = None
-    boards: int | None = None         # y9nb: `board: …` windows on this server, None = unknown / not in tmux
+    boards: int | None = None         # y9nb: `board: …` herdr tabs, None = unknown / not in herdr
 
 
 def clamp_ui(ui: UIState, items_len: int) -> UIState:

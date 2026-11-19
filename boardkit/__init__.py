@@ -7,10 +7,10 @@ cursor   UIState, pure key handling, overlay/expansion bookkeeping
 panels   boxed panels in a flow layout, grids, panel focus, the z zoom (tjq1)
 workers  Runner, SourceWorker, Coalescer, Gen
 expand   background expansion fetches with token ownership
-app      the curses loop, clipboard, tmux jump, url open
-windows  the board: … tmux windows on this server: list, switch ([ / ]), count
-context  the registry: name, schema, snapshot path, launch command, window name
-launcher board <context>: one tmux window per context, selected when it exists
+app      the curses loop, clipboard, herdr pane jump and split, url open
+windows  the board: … herdr tabs: list, switch ([ / ]), count; the herdr CLI helper
+context  the registry: name, schema, snapshot path, launch command, tab label
+launcher board <context>: one herdr tab per context, focused when it exists
 
 Nothing here imports curses at module level.
 

@@ -1,4 +1,4 @@
-"""boardkit.app — the generic curses loop, clipboard, tmux jump, url open.
+"""boardkit.app — the generic curses loop, clipboard, herdr pane jump, url open.
 
 `tui_loop` is marshal-board's old `_tui_loop` with every board-specific
 call routed through a `Board`: the loop owns curses, the key table, the
@@ -15,7 +15,7 @@ arms nothing. An expansion the zoom hides stays OPEN and unpainted, and Esc
 spends a press on it; see the comment at the layout call for why closing it
 automatically was tried and reverted.
 
-`[` / `]` and the board-window count (y9nb) are the loop's: `switch` and
+`[` / `]` and the board-tab count (y9nb) are the loop's: `switch` and
 `board_count` are injectable, `boardkit.windows` by default.
 
 curses is NEVER imported here: the loop receives the module as a
@@ -26,6 +26,7 @@ from __future__ import annotations
 import os
 import queue
 import re
+import shlex
 import subprocess
 import threading
 import time
@@ -62,98 +63,91 @@ _OPENABLE = re.compile(r"^(https?://|obsidian:)")
 
 def clipboard_copy(text: str, env: dict | None = None,
                    run=subprocess.run) -> str | None:
-    """Copy `text` to the system clipboard. None on success, else the
-    reason. pbcopy first (macOS system clipboard, works inside tmux),
-    tmux load-buffer -w as the fallback."""
-    for argv in (["pbcopy"], ["tmux", "load-buffer", "-w", "-"]):
-        try:
-            proc = run(argv, input=text.encode(), env=env, timeout=5,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except (OSError, subprocess.SubprocessError):
-            continue
-        if proc.returncode == 0:
-            return None
-    return "no clipboard helper (pbcopy / tmux load-buffer)"
-
-
-def open_in_tmux(argv: list[str], env: dict | None = None, run=subprocess.run,
-                 environ=os.environ) -> str:
-    """Open `argv` in a tmux split beside this pane. Returns the footer
-    notice — outside tmux there is no pane to split, so say so instead."""
-    if not environ.get("TMUX"):
-        return "not inside tmux: run " + " ".join(argv)
+    """Copy `text` to the system clipboard with pbcopy. None on success,
+    else the reason. (rh2y: the tmux load-buffer fallback is gone.)"""
     try:
-        p = run(["tmux", "split-window", "-h", *argv], env=env, timeout=5,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except (OSError, subprocess.SubprocessError) as exc:
-        return f"tmux split failed: {exc}"
-    return ("opened in a tmux split" if p.returncode == 0
-            else f"tmux split failed: rc={p.returncode}")
+        proc = run(["pbcopy"], input=text.encode(), env=env, timeout=5,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        proc = None
+    if proc is not None and proc.returncode == 0:
+        return None
+    return "no clipboard helper (pbcopy)"
 
 
-# A jump target is either a tmux pane id or a plain session name: nothing
-# that could read as a flag, a target-syntax (`:` / `.`, which tmux itself
-# never leaves in a session name) or a control sequence reaches `-t`.
-_PANE_TARGET = re.compile(r"%\d+\Z")
+def open_in_pane(argv: list[str], env: dict | None = None, run=subprocess.run,
+                 environ=os.environ) -> str:
+    """Open `argv` in a herdr split right of this pane ($HERDR_PANE_ID).
+    Returns the footer notice — outside herdr there is no pane to split, so
+    say so instead. The split's shell `exec`s the program, so the split
+    closes when it exits; a split that could not start it is closed. `env`
+    is the herdr client's environment; the split's shell inherits the herdr
+    server's, never the board's."""
+    me = environ.get("HERDR_PANE_ID") or ""
+    if not me:
+        return "not inside herdr: run " + " ".join(argv)
+    cli_env = env or environ        # an EMPTY env means "inherit", as in tui_loop
+    res = kit_windows.herdr_json(["pane", "split", me, "--direction", "right", "--focus"],
+                                 run, cli_env)
+    p = res.get("pane") if res is not None else None
+    pane = p.get("pane_id") if isinstance(p, dict) else None
+    if not isinstance(pane, str) or not pane:
+        return "herdr split failed"
+    if not kit_windows.herdr_ok(["pane", "run", pane, "exec " + shlex.join(argv)], run, cli_env):
+        kit_windows.herdr_ok(["pane", "close", pane], run, cli_env)
+        return f"herdr split failed: could not start {argv[0] if argv else ''}"
+    return "opened in a herdr split"
+
+
+# A jump target is a herdr pane id (`w5:p3`): nothing that could read as a
+# flag or carry a control sequence reaches herdr. A tmux pane id or session
+# name is refused, never guessed at.
+_HERDR_PANE_TARGET = re.compile(r"[A-Za-z0-9]+:p[A-Za-z0-9]+\Z")
+# rh2y: repomanboard's vet_target still reads these two until its readers
+# hand herdr pane ids (jibot-code#sth8, #bwrw). _PANE_TARGET takes a herdr
+# pane id as well as the old `%N`, so that move needs no change here; no
+# code in boardkit passes either shape to tmux.
+_PANE_TARGET = re.compile(r"(?:%\d+|[A-Za-z0-9]+:p[A-Za-z0-9]+)\Z")
 _SESSION_TARGET = re.compile(r"[^\s%:.\-\x00-\x1f\x7f][^\s%:.\x00-\x1f\x7f]*\Z")
 
 
-def jump_to_tmux(target: str, env: dict | None = None, run=subprocess.run,
-                 environ=os.environ) -> str:
-    """Switch this tmux client to `target`: a pane id (`%N`) selects the
-    pane, then its window, then switches the client to its session; a
-    session name just switches the client (`=name` = exact match, since
-    -t prefix-matches otherwise). Returns the footer notice.
+def jump_to_pane(target: str, env: dict | None = None, run=subprocess.run,
+                 environ=os.environ, request=None) -> str:
+    """Focus herdr pane `target` itself — its workspace, its tab and the
+    pane within the tab, not only the tab, where another split may hold
+    focus. Returns the footer notice. Outside herdr nothing is focused; the
+    notice names the `herdr tab focus` to run instead.
 
-    Outside tmux there is no client to switch, so the notice names the
-    `tmux attach` to run instead. select-pane / select-window act on the
-    server, not a client, so for a pane target they still run: the attach
-    then lands on that pane. `attach -t` takes a session, never a bare
-    pane id (tmux only parses window/pane syntax past a `:` or `.`), so
-    the pane's session is looked up for the hint (fresheyes round 1)."""
+    The focus is the socket API's `pane.focus` (`request`, by default
+    windows.herdr_request): the CLI's `herdr pane focus` only moves to a
+    neighbour. The reply must name the target as focused; anything else is
+    a failed jump, never "jumped"."""
     target = str(target)
-    pane = bool(_PANE_TARGET.fullmatch(target))
-    if not pane and not _SESSION_TARGET.fullmatch(target):
-        return "not a tmux target"
-    inside = bool(environ.get("TMUX"))
-    cmds = []
-    if pane:
-        cmds += [["tmux", "select-pane", "-t", target],
-                 ["tmux", "select-window", "-t", target]]
-    if inside:
-        cmds.append(["tmux", "switch-client", "-t", target if pane else "=" + target])
-    for argv in cmds:
-        try:
-            p = run(argv, env=env, timeout=5,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except (OSError, subprocess.SubprocessError) as exc:
-            return f"tmux jump failed: {exc}"
-        if p.returncode != 0:
-            return f"tmux jump failed: rc={p.returncode}"
-    if inside:
-        return f"jumped to {target}"
-    session = _pane_session(target, env, run) if pane else target
-    if session is None:
-        return f"not inside tmux: pane {target} selected; tmux attach to its session"
-    return f"not inside tmux: tmux attach -t ={session}"
+    if not _HERDR_PANE_TARGET.fullmatch(target):
+        return "not a herdr pane id"
+    cli_env = env or environ        # an EMPTY env means "inherit", as in tui_loop
+    res = kit_windows.herdr_json(["pane", "get", target], run, cli_env)
+    p = res.get("pane") if res is not None else None
+    tab = p.get("tab_id") if isinstance(p, dict) else None
+    if not isinstance(tab, str) or not tab:
+        return f"herdr jump failed: pane {target} not found"
+    if not kit_windows.inside(environ):
+        return f"not inside herdr: pane {target} is in tab {tab} — herdr tab focus {tab}"
+    request = request or kit_windows.herdr_request
+    # the board's env may be a narrowed one with no socket in it; the
+    # process's own $HERDR_SOCKET_PATH names the server it runs under
+    sock_env = cli_env if cli_env.get("HERDR_SOCKET_PATH") else environ
+    res = request("pane.focus", {"pane_id": target}, sock_env)
+    p = res.get("pane") if isinstance(res, dict) else None
+    if not (isinstance(p, dict) and p.get("pane_id") == target and p.get("focused") is True):
+        return f"herdr jump failed: pane focus {target} (tab {tab} — herdr tab focus {tab})"
+    return f"jumped to {target}"
 
 
-def _pane_session(pane: str, env, run) -> str | None:
-    """The session name owning tmux pane `pane`, or None when the server
-    cannot say (no server, odd name)."""
-    try:
-        p = run(["tmux", "display-message", "-p", "-t", pane, "#{session_name}"],
-                env=env, timeout=5, stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    out = getattr(p, "stdout", None) or b""
-    if isinstance(out, bytes):
-        out = out.decode("utf-8", "replace")
-    name = out.strip()
-    if p.returncode != 0 or not _SESSION_TARGET.fullmatch(name):
-        return None
-    return name
+# rh2y: the old names, kept until repomanboard (jibot-code#bwrw) moves to the
+# new ones. Neither runs tmux.
+open_in_tmux = open_in_pane
+jump_to_tmux = jump_to_pane
 
 
 def open_url(url: str, env: dict | None = None, run=subprocess.run) -> str:
@@ -243,7 +237,7 @@ class Action:
     """What a board-specific key means. `value` carries the payload:
     copy   str | callable -> str | (text, notice) | None   (run on a thread)
     spawn  argv list                                       (child process)
-    jump   tmux target: pane id (%N) or session name       (switch-client)
+    jump   herdr pane id (w5:p3)                           (tab focus)
     open   url str                                          (desktop opener)
     notice footer text
     cursor the item key to jump the cursor to
@@ -597,7 +591,7 @@ def tui_loop(stdscr, curses_mod, board, *, copy=None, opener=None,
         raise ValueError(f"board keymap refused: {err}")
     # y9nb: one env for both defaults — an EMPTY child_env() means "inherit",
     # so it must fall back to os.environ, not be handed on as an environment
-    # with no $TMUX (which reads as "outside tmux": no switch, no count).
+    # with no $HERDR_PANE_ID (which reads as "outside herdr": no switch, no count).
     default_env = board.child_env() or os.environ
     if switch is None:
         switch = lambda forward, env=None: kit_windows.switch_board(
@@ -605,8 +599,8 @@ def tui_loop(stdscr, curses_mod, board, *, copy=None, opener=None,
     if board_count is None:
         board_count = kit_windows.BoardCount(environ=default_env)
     copy = copy or clipboard_copy
-    spawn = spawn or open_in_tmux
-    jump = jump or jump_to_tmux
+    spawn = spawn or open_in_pane
+    jump = jump or jump_to_pane
     if opener is None:
         opener = open_url
     conf_runner = Runner()             # one per loop; reaped in the finally below
